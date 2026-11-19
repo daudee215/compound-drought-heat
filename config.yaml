@@ -1,0 +1,38 @@
+target_nuts: [ES24, ES42, ES51, ES52, ES61, ES62]
+pilot_nuts: ES52
+pilot_north_boundary: 39.375
+grid_degrees: 0.25
+minimum_cell_land_area_km2: 50
+area_crs: EPSG:3035
+source_model: era5
+source_start: '1991-01-01'
+source_end: '2022-12-31'
+baseline_start: '1991-01-01'
+baseline_end: '2010-12-31'
+heat_percentile: 0.9
+heat_minimum_c: 30
+heat_minimum_days: 3
+seasonal_window_days: 31
+drought_window_days: 90
+drought_percentile: 0.2
+alternate_drought_percentile: 0.1
+lookback_days: 56
+lead_days: 7
+periods:
+  train: ['2011-01-01', '2014-12-31']
+  validation: ['2015-01-01', '2016-12-31']
+  probability_calibration: ['2017-01-01', '2018-12-31']
+  conformal_calibration: ['2019-01-01', '2020-12-31']
+  test: ['2021-01-01', '2022-12-31']
+seeds: [20261028, 20261029, 20261030]
+tcn_channels: 16
+tcn_dilations: [1, 2, 4, 8]
+dropout: 0.2
+learning_rate: 0.001
+batch_size: 256
+max_epochs: 20
+patience: 4
+mc_passes: 30
+conformal_alpha: 0.1
+bootstrap_replicates: 200
+download_spacing_seconds: 20

@@ -1,0 +1,7 @@
+split,geography,n,events,prevalence
+conformal_calibration,development,5800,13,0.0022413793103448275
+probability_calibration,development,5790,38,0.0065630397236614854
+test,development,5790,57,0.009844559585492229
+test,north_holdout,6369,2,0.0003140210394096404
+train,development,13100,54,0.004122137404580153
+validation,development,5800,41,0.007068965517241379

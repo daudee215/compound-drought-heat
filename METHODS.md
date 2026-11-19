@@ -1,0 +1,51 @@
+# Implemented methods
+
+See EVENT_DEFINITION.md for exact labels and causal forecast support, DESIGN_DECISIONS.md for pre-fit access/feasibility changes, config.yaml for all fixed settings, and RESULTS_AND_LIMITATIONS.md for executed outputs.
+
+## Scope, sources and area
+
+The future design domain comprises GISCO NUTS 2024 ES24, ES42, ES51, ES52, ES61 and ES62: Aragón, Castilla-La Mancha, Cataluña, Comunitat Valenciana, Andalucía and Región de Murcia. It is a contiguous, clearly enumerated Spanish regional mosaic with Mediterranean and interior/Atlantic-influenced climate; it is not an old project boundary. The pilot clips ES52 south of 39.375° N. Native 0.25° ERA5 cells with less than 50 km² of pilot land are excluded. Geographic edges are densified at a maximum 0.01° segment before EPSG:3035 area measurement, reducing inconsistent projected chord areas. The land mask is the generalised administrative boundary, not a fine coastline or ecological land-fraction product. Native cell support is retained; no fine-grid interpolation adds apparent information.
+
+Daily Tmax and precipitation are obtained from Open-Meteo's explicit ERA5 model, UTC, `elevation=nan`, `cell_selection=nearest`. Returned centres, finite values, units and all daily timestamps are checked. The provider returns °C and mm daily aggregates; Kelvin conversion and raw ERA5-Land accumulation differencing must **not** be applied again. Direct CDS ERA5-Land was unavailable without a configured account/token, so it is a documented source substitution. The input is reanalysis, not station ground truth; this pilot does not acquire an ensemble measure of reanalysis uncertainty.
+
+MOD11A1.061 is daily ~1 km land-surface temperature, with collection metadata beginning in 2000. MOD13Q1.061 is a 16-day ~250 m vegetation-index composite beginning in 2000. NASA metadata were inspected, but no granules or QC masks were downloaded. We do not treat LST as 2 m air temperature, or a 16-day best-pixel composite as available at its beginning. No NDVI/LST cloud fraction, imputation statistic or missingness sensitivity result is invented. Those modules remain unexecuted.
+
+## Cube, reference and labels
+
+The cube is daily `time,y,x`, regular native latitude/longitude with UTC and retained leap days. Xarray/Dask chunks use one spatial cell and one year of time; derived netCDF and inspectable learning arrays are retained. Outside-support cells remain missing. The trailing 90-day precipitation requires 90 finite days; its first 89 days are unsupported. Compound labels in the netCDF are missing during this warm-up. The computational binary arrays must be interpreted with `label_valid`; every supervised target is asserted valid. No future fill is used.
+
+A 1991–2010 reference precedes every supervised year. Calendar-day thresholds use circular ±15-day windows, with leap day sharing 28 February's reference index. The 20-year pilot reference is shorter than a standard 30-year normal. Thermal and precipitation-deficit criteria, strict inequalities and zero-threshold behavior are defined in EVENT_DEFINITION.md. The alternative drought threshold is a predeclared definition sensitivity, not an optimisation target.
+
+## Time/geography protection
+
+Training 2011–2014; early stopping 2015–2016; probability calibration and F1 threshold selection 2017–2018; split-conformal calibration 2019–2020; final test 2021–2022. A 56-day input ending at t includes a 90-day rolling feature at its earliest step, so raw dependencies begin at t−144. Every sample's entire raw history and target t+7 must lie inside its temporal partition. This makes histories disjoint across stages, at the cost of losing the first 151 target days of each new period.
+
+Geography is fixed from cell latitude before model performance is observed. Northern cells are reserved from supervised fitting, checkpoint selection, Platt mapping and conformal calibration. One native latitude row forms a buffer. Their historical reference climate is available, but their supervised labels are not used for fitting. Drought can span both sides of this gap; geographical separation does not establish statistical independence. Errors and correlations are resampled by 50 km projected blocks, with residual dependence explicitly retained as a limitation.
+
+## Models and probability calibration
+
+The TCN has four residual blocks, dilation 1,2,4,8, two left-padded kernel-3 convolutions per block, 16 channels, ReLU and dropout 0.2. There is no batch norm. Its receptive field is 61 positions over a 56-day input. The final time position feeds a scalar logit. Adam, learning rate 0.001, batch size 256 and gradient norm clipping 1 are fixed. Weighted BCE uses the training negative/positive ratio; it is not a calibrated prevalence model. Early stopping retains the highest validation AP with patience 4 and a maximum of 20 epochs. Three seeds are predeclared; the main model is the first seed, not the most favourable test seed. CPU/CUDA selection and hardware/runtime are logged.
+
+Training-only window means/standard deviations normalise the five channels. Logistic regression sees final-day values and 7/28/56-day means plus 56-day standard deviations of the same inputs. Training-only seasonal climatology and seven-day persistence of the antecedent event rule are additional baselines. No target-day temperature or precipitation enters any forecast.
+
+Platt mappings are fitted on 2017–2018 development cells. F1 operating thresholds maximise F1 in that same probability-calibration period, never in test or conformal data. MC dropout enables only dropout modules at inference; 30 passes are transformed through the fixed Platt mapping and then averaged. Deterministic seed comparisons and the primary MC result are distinguished. Averaging a nonlinear probability mapping can affect calibration, so actual MC reliability is measured rather than presumed.
+
+## Evaluation and uncertainty
+
+AP is shown with event prevalence. F1, recall, precision, Brier and all four cell-time confusion counts share explicit denominators. Quantile-bin reliability is plotted over a declared rare-event range. Episodes are maximal same-cell positive runs; one-to-one overlap matching supplies episode TP/FP/FN. Episode true negatives are undefined. Window endpoints can truncate episodes. Native-grid six-neighbour space-time connected components are a support-dependence diagnostic, not proof of independent physical events.
+
+Spatial-block bootstrap intervals use 200 whole-block resamples. AP resamples without positive labels are excluded and the valid count is reported; intervals remain conditional/descriptive under sparse, correlated episodes. Dropout standard deviation is only an approximate component of model uncertainty; it is not all epistemic uncertainty and does not quantify observation, label or aleatoric uncertainty. Correlations define both variables, Spearman direction, raw denominator, spatial clusters and resampling intervals. The strong pooled spread/error correlation is qualified by the identity absolute error = predicted event probability on non-events. Boundary proximity is an offline diagnostic, never a predictor. Nearest-training distance is measured in standardised antecedent-summary space against a training-only reference subset.
+
+## Split conformal
+
+The causal convolution design is informed by [Bai, Kolter and Koltun's sequence-model study](https://arxiv.org/abs/1803.01271). MC-dropout follows the approximate model-uncertainty interpretation of [Gal and Ghahramani](https://proceedings.mlr.press/v48/gal16.html). Epistemic uncertainty concerns imperfectly learned model structure/parameters and can sometimes shrink with better evidence. Aleatoric uncertainty concerns unresolved variability in outcomes conditional on the supplied information. Dropout spread is not a complete measurement of either, and a poorly learned rare-event classifier can be confidently wrong. We do not infer a full uncertainty decomposition from these passes.
+
+We directly implement least-ambiguous classification (LAC), following the [official MAPIE score definition](https://github.com/scikit-learn-contrib/MAPIE/blob/master/doc/content/conformal-prediction/conformity-scores.md), without claiming to run MAPIE. Calibration scores are 1−p(true class). The order-statistic rank is ceil((n+1)(1−alpha)); if it exceeds n, the threshold is infinity. Include class c whenever 1−p(c) <= q. Empty sets are allowed and reported.
+
+Scenarios compare pooled nominal 90%, weekly-thinned nominal 90%, event/non-event class-conditional nominal 90% and pooled nominal 95%. Each is evaluated by geography, year, season, event label and precipitation-deficit severity. Only 13 positive calibration cell-days exist, so class-conditional event quantiles are fragile. Correlation, temporal shift and rare-event support violate the conditions needed to infer distribution-free or conditional guarantees from a textbook exchangeability theorem. Empirical marginal coverage must never substitute for event coverage.
+
+## GIS and case study
+
+Native 0.25° COGs provide exact month-end labels, forecast mean, dropout spread, prediction-set size, ambiguity/empty flags and coverage. Additional COGs show peak-labelled-extent conditions, thermal excess, precipitation deficit and maximum within-2022 run length. All have CRS, nodata, units, target time and provenance. Tiny rasters may legitimately have no overviews; strict COG validation is authoritative. The geographic buffer is not assigned evaluated predictions. Source coverage and forecast eligibility are separate, and MODIS availability is zero because no granules were acquired, not because all days were cloudy.
+
+The area extent is a native-grid rule approximation weighted by clipped pilot land, never the full design domain. Monthly counts differ from exact month-end COG snapshots. The peak date is selected by labelled area, not by prediction skill. JRC/GDO reports supply independent regional context only. No area-confidence interval, numerical station validation, causal attribution or operational forecasting guarantee is claimed. QGIS XML/styles and datasource checks are supplied; native QGIS rendering remains unverified.
