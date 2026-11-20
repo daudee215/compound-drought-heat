@@ -4,9 +4,15 @@ Retrospective seven-day drought–heat forecast evaluation in southern Valencia 
 
 [Portfolio case study](https://www.daudee.com/work/valencia-drought-heat)
 
+## Inspect the published results
+
+- [Conformal coverage](metrics/conformal_coverage.csv) records event-conditional and aggregate coverage.
+- [Discrimination](metrics/discrimination.csv) compares persistence and learned models.
+- [Split support](metrics/split_support.csv) reports the positive counts across evaluation periods.
+
 ## Run
 
-Use Python 3.12 in a clean virtual environment. Full pipeline runs may need the original source snapshots or a new acquisition from the documented providers.
+Use Python 3.12 in a clean virtual environment. The [reproduction guide](REPRODUCE.md) describes source acquisition and generated outputs. A full run downloads the ERA5 series and boundary geometry, then rebuilds the climate cube, checkpoints and metrics. The exact historical run depends on the original provider responses.
 
 ```sh
 python -m pip install -r requirements-lock.txt
